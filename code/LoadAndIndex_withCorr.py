@@ -57,21 +57,17 @@ for i in np.arange(0,n_voxels):
     
 
 ##Step 2 
-##Calculate throughour the target indices according to zeta score
+##Calculate distance measures on the actual data
 #To get the values in mask for voxel 12
 img=nib.load('/Users/Jonathan/Projects/GProcess/Paper/ModelNoScale/orig_T2w_time2_z.nii.gz');
 raw_data=img.get_data()
 
-#Get values
-test=np.corrcoef(raw_data[fun[42][:,0],fun[42][:,1],fun[42][:,2],:].T)
+#Get values for euclidean / correlation - need to figure out calculating distance to knn aspect & zeta 
+#Mahalanobis is really slow for me but I think (know) I'm doing it wrong
+for j in np.arange(0,n_voxels):
+    test=np.corrcoef(raw_data[fun[j][:,0],fun[j][:,1],fun[j][:,2],:].T)
+    test=euclidean_distances(raw_data[fun[42][:,0],fun[42][:,1],fun[42][:,2],:].T)
+    print(j/n_voxels)
 
-
-test2=euclidean_distances(raw_data[fun[42][:,0],fun[42][:,1],fun[42][:,2],:].T)
-import seaborn as sns
-sns.heatmap(test2)
-
-from sklearn.neighbors import NearestNeighbors
-nbrs = NearestNeighbors(n_neighbors=8, algorithm='ball_tree').fit(raw_data[fun[42][:,0],fun[42][:,1],fun[42][:,2],:].T)
-distances, indices = nbrs.kneighbors(raw_data[fun[42][:,0],fun[42][:,1],fun[42][:,2],:].T)
 
 
