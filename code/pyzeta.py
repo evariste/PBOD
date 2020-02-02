@@ -2,7 +2,9 @@ import os
 from defaults import defaults
 from itertools import product
 import numpy as np
+import nibabel as nib
 
+##############################################################
 
 def get_patch_offsets(patch_radius, im_shape):
     """
@@ -70,11 +72,11 @@ class PyZeta(object):
 
     def __init__(self, args):
 
-        self.target = args.target
-        self.ref_set = args.ref_set
+        self.target_name = args.target
+        self.ref_set_name = args.ref_set
         self.output = args.output
 
-        self.mask = args.mask
+        self.mask_name = args.mask
 
         self.k_zeta = args.k_zeta
         self.patch_rad = args.patch_radius
@@ -90,6 +92,14 @@ class PyZeta(object):
             self.load_config_settings()
 
         self.report()
+
+        # Stuff that will be set up later
+        self.mask = None
+        self.tgt = None
+        self.ref = None
+
+        self.tgt_dat = None
+        self.ref_dat = None
 
 
     ##############################################################
@@ -111,14 +121,14 @@ class PyZeta(object):
     def report(self):
 
         print('-------------------------------------------')
-        print('Target: {:s}'.format(self.target))
-        print('Refs:   {:s}'.format(self.ref_set))
+        print('Target: {:s}'.format(self.target_name))
+        print('Refs:   {:s}'.format(self.ref_set_name))
         print('Output: {:s}'.format(self.output))
 
-        if self.mask is None:
+        if self.mask_name is None:
             print('No mask given.')
         else:
-            print('Mask:   {:s}'.format(self.mask))
+            print('Mask:   {:s}'.format(self.mask_name))
 
         print('k_zeta:    {:>2d}'.format(self.k_zeta))
         print('patch_rad: {:>2d}'.format(self.patch_rad))
@@ -130,15 +140,115 @@ class PyZeta(object):
     ##############################################################
 
 
+    def initialise(self):
+
+        print('Initialise')
+
+        assert os.path.isfile(self.target_name)
+        assert os.path.exists(self.ref_set_name)
+
+        if not (self.mask_name is None):
+            assert os.path.isfile(self.mask_name)
+
+
+        self.tgt = nib.load(self.target_name)
+
+        if os.path.isfile(self.ref_set_name):
+            self.ref = nib.load(self.ref_set_name)
+        else:
+            # TODO: Deal with directory of ref set data.
+            raise Exception('Ref set as a directory: TODO')
+
+
+        if self.mask_name is None:
+            # TODO: make a full mask
+            self.mask = None
+        else:
+            self.mask = nib.load(self.mask_name)
+
+
+
+    ##############################################################
+
     def run(self):
 
         print('Running')
 
+        self.tgt_dat = self.tgt.get_fdata()
+        self.ref_dat = self.ref.get_fdata()
 
         if self.mask is None:
-            # TODO: make a full mask
-            self.mask = 1
+            self.gen_default_mask()
+        else:
+            self.mask_dat = self.mask.get_fdata()
 
+
+        self.check_input_data()
+
+
+    ##############################################################
+
+
+    def gen_default_mask(self):
+
+        sz = self.tgt_dat.shape
+        self.mask = np.ones(sz, dtype=np.uint8)
+        return
+
+    ##############################################################
+
+    def check_input_data(self):
+
+        sz_mask = self.mask_dat.shape
+        sz_tgt = self.tgt_dat.shape
+        sz_ref = self.ref_dat.shape
+
+        # Dimensions
+        assert len(sz_mask) == 3
+        assert len(sz_tgt) in [3,4]
+        assert len(sz_ref) in [3,4,5]
+
+        # Check compatibility - spatial dimensions
+        assert sz_mask == sz_tgt[:3]
+        assert sz_mask == sz_ref[:3]
+
+        # Target and ref compatible
+        if len(sz_tgt) == 3:
+            assert len(sz_ref) in [3,4]
+
+        if len(sz_tgt) == 4:
+            assert len(sz_ref) in [4,5]
+            assert sz_tgt == sz_ref[:4]
+
+
+        # Zero out mask where not feasible
+        margin = self.nbhd_rad + self.patch_rad
+
+        ix = np.ix_(range(0,margin))
+        modified = False
+        if np.any(self.mask_dat[ix,:,:]):
+            self.mask_dat[ix,:,:] = 0
+            modified = True
+        if np.any(self.mask_dat[:,ix,:]):
+            self.mask_dat[:,ix,:] = 0
+            modified = True
+        if np.any(self.mask_dat[:,:,ix]):
+            self.mask_dat[:,:,ix] = 0
+            modified = True
+        ix = np.ix_(-margin,0)
+        if np.any(self.mask_dat[ix,:,:]):
+            self.mask_dat[ix,:,:] = 0
+            modified = True
+        if np.any(self.mask_dat[:,ix,:]):
+            self.mask_dat[:,ix,:] = 0
+            modified = True
+        if np.any(self.mask_dat[:,:,ix]):
+            self.mask_dat[:,:,ix] = 0
+            modified = True
+
+        if modified and (not (self.mask_name is None)):
+            print('Warning needed to set foreground mask voxels to zero.')
+            print('Too close to volume edge.')
 
 
     ##############################################################
