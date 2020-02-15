@@ -6,64 +6,75 @@ import nibabel as nib
 
 ##############################################################
 
-def get_patch_offsets(patch_radius, im_shape):
+def get_patch_offsets(patch_rad, sz_img, strides):
     """
-    For given patch size, in a specific image, figure out the unraveled (flat index)
-    offsets of each pixel in the patch relative to a central voxel.
+        For given patch size, in an image array with the given size and
+        strides, figure out the unraveled (flat index) offsets of each
+        voxel in a patch relative to its central voxel.
 
-    Works with 3D and 4D images.
+        NB works for 3D and 4D images only.
 
-    If the image is 4D, the first three dimensions are assumed to
-    be spatial and the last dimension is assumed to correspond time/frames.
+        If the image is 4D, the first three dimensions are assumed to
+        be spatial and the last dimension is assumed to correspond
+        time/frames.
 
-    If the image is 4D, the offsets are relative to the spatial centre
-    of the patch in frame index 0
-
-
-    :param patch_radius: Integer, patches are assumed to have odd
-                         diameter where diam = 2 * radius.
-    :param im_shape: Size of image array containing patch.
+        If the image is 4D, the offsets are relative to the spatial
+        centre of the patch in frame index 0
 
 
-    :return: Flat index offsets of voxels in patch relative to central voxel.
-    """
-
-    im_dim = len(im_shape)
-
-    assert im_dim in [3,4]
-
-    # Spatial diameter.
-    patch_diam = 1 + 2 * patch_radius
-
-    # Can't exceed image spatial extents.
-    for k in range(3):
-        assert patch_diam <= im_shape[k]
+        :param patch_rad: Integer, patches are assumed to have odd
+                          diameter where diam = 2 * radius + 1.
+        :param sz_img: Size of image array.
+        :param strides: Strides of data for image array.
 
 
-    # Patch spatial extent
-    ix_range = np.arange(patch_diam)
-    ix_ranges = [ix_range] * 3
+        :return: Flat index offsets of voxels in patch relative to
+                 central voxel.
+        """
 
-    # Spatial location of centre that we use to calculate the offsets.
-    idx_cent = [patch_radius] * 3
+    assert len(strides) in [3,4]
 
-    if im_dim == 4:
-        # T-extent at the end.
-        t_range = np.arange(im_shape[-1])
-        ix_ranges.append(t_range)
+    s = np.asarray(strides)
+    f_order = np.all(s[:-1] < s[1:])
+    c_order = np.all(s[:-1] > s[1:])
 
-        # Make the patch centre in the first frame of the 4D image
-        idx_cent.append(0)
+    assert (f_order or c_order)
+
+    # spatial patch indices
+    rx = range(-patch_rad, patch_rad+1)
+    rxs = 3 * [rx]
+
+    # 'C' order by default, last index changes fastest.
+    ix = list(product(*rxs))
+
+    if f_order:
+        # Reverse entries so that we get Fortran order.
+        # first index changes fastest.
+        ix = [x[::-1] for x in ix]
+
+    offset_i, offset_j, offset_k = strides[:3]
+
+    offset_t = 0
+    t_dim = 1
+
+    if len(strides) == 4:
+        offset_t = strides[-1]
+        assert len(sz_img) == 4
+        t_dim = sz_img[-1]
 
 
-    flat_idx_cent = np.ravel_multi_index(idx_cent, im_shape)
+    vol_patch = t_dim * (1+2*patch_rad)**3
 
-    idx_offsets = []
-    for multi_idx in product(*ix_ranges):
-        flat_idx_curr = np.ravel_multi_index(multi_idx, im_shape)
-        idx_offsets.append(flat_idx_curr - flat_idx_cent)
+    offsets = np.zeros((vol_patch,), dtype=np.int64)
 
-    return np.asarray(idx_offsets)
+
+    n = 0
+    for t in range(t_dim):
+        for i,j,k in ix:
+            offsets[n] = i * offset_i + j * offset_j + k * offset_k + t * offset_t
+            n += 1
+
+    return np.atleast_2d(offsets)
 
 
 ##############################################################
