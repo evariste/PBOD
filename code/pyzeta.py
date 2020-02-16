@@ -161,16 +161,38 @@ class PyZeta(object):
         if not (self.mask_name is None):
             assert os.path.isfile(self.mask_name)
 
-
+        # Target
         self.tgt = nib.load(self.target_name)
 
+
+        # Reference set
         if os.path.isfile(self.ref_set_name):
             self.ref = nib.load(self.ref_set_name)
+        elif os.path.isdir(self.ref_set_name):
+            print('Loading reference data from directory')
+            d = self.ref_set_name
+            fs = os.listdir(d)
+
+            imgs = []
+            for f in fs:
+
+                try:
+                    ff = os.path.join(d,f)
+                    img = nib.load(ff)
+                except:
+                    print('Cannot load file: {:s}')
+                    continue
+                imgs.append(img)
+
+            assert len(imgs) > 0
+
+            self.ref = nib.concat_images(imgs)
+
         else:
-            # TODO: Deal with directory of ref set data.
-            raise Exception('Ref set as a directory: TODO')
+            raise Exception('Cannot load reference data.')
 
 
+        # Mask
         if self.mask_name is None:
             # TODO: make a full mask
             self.mask = None
@@ -182,6 +204,8 @@ class PyZeta(object):
     ##############################################################
 
     def run(self):
+
+        self.initialise()
 
         print('Running')
 
@@ -235,7 +259,7 @@ class PyZeta(object):
         # Zero out mask where not feasible
         margin = self.nbhd_rad + self.patch_rad
 
-        ix = np.ix_(range(0,margin))
+        ix = range(0,margin)
         modified = False
         if np.any(self.mask_dat[ix,:,:]):
             self.mask_dat[ix,:,:] = 0
@@ -246,7 +270,8 @@ class PyZeta(object):
         if np.any(self.mask_dat[:,:,ix]):
             self.mask_dat[:,:,ix] = 0
             modified = True
-        ix = np.ix_(-margin,0)
+
+        ix = range(-margin,0)
         if np.any(self.mask_dat[ix,:,:]):
             self.mask_dat[ix,:,:] = 0
             modified = True
