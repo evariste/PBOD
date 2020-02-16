@@ -112,6 +112,7 @@ class PyZeta(object):
         self.tgt_dat = None
         self.ref_dat = None
 
+        return
 
     ##############################################################
 
@@ -125,6 +126,7 @@ class PyZeta(object):
         # TODO:
         # Stuff here ...
 
+        return
 
     ##############################################################
 
@@ -147,9 +149,62 @@ class PyZeta(object):
         print('dist:       {:s}'.format(self.dist))
         print('-------------------------------------------')
 
+        return
 
     ##############################################################
 
+    def load_refs_from_dir(self):
+        print('Loading reference data from directory')
+        d = self.ref_set_name
+        fs = os.listdir(d)
+
+        imgs_dat = []
+
+        for f in fs:
+
+            try:
+                ff = os.path.join(d, f)
+                img = nib.load(ff)
+            except:
+                print('Cannot load file: {:s}')
+                continue
+            imgs_dat.append(img.get_fdata())
+
+        assert len(imgs_dat) > 0
+
+        sz = list(set([x.shape for x in imgs_dat]))
+        assert len(sz) == 1 , 'Ref. data: size mismatch'
+
+        strides = list(set([x.strides for x in imgs_dat]))
+        assert len(strides) == 1 , 'Ref. data: strides mismatch'
+
+        dt = list(set([x.dtype for x in imgs_dat]))
+        assert len(dt) == 1 , 'Ref. data: type mismatch'
+
+        sz, strides, dt = sz[0], strides[0], dt[0]
+
+        s = np.asarray(strides)
+        f_order = np.all(s[:-1] < s[1:])
+        c_order = np.all(s[:-1] > s[1:])
+
+        assert (f_order or c_order)
+
+        order = 'C'
+        if f_order:
+            order = 'F'
+
+        n_imgs = len(imgs_dat)
+
+        dat_all = np.zeros(sz+(n_imgs,), dtype=dt, order=order)
+
+        for n in range(n_imgs):
+            dat_all[...,n] = imgs_dat[n]
+
+        self.ref = nib.Nifti1Image(dat_all, np.eye(4))
+
+        return
+
+    ##############################################################
 
     def initialise(self):
 
@@ -165,33 +220,6 @@ class PyZeta(object):
         self.tgt = nib.load(self.target_name)
 
 
-        # Reference set
-        if os.path.isfile(self.ref_set_name):
-            self.ref = nib.load(self.ref_set_name)
-        elif os.path.isdir(self.ref_set_name):
-            print('Loading reference data from directory')
-            d = self.ref_set_name
-            fs = os.listdir(d)
-
-            imgs = []
-            for f in fs:
-
-                try:
-                    ff = os.path.join(d,f)
-                    img = nib.load(ff)
-                except:
-                    print('Cannot load file: {:s}')
-                    continue
-                imgs.append(img)
-
-            assert len(imgs) > 0
-
-            self.ref = nib.concat_images(imgs)
-
-        else:
-            raise Exception('Cannot load reference data.')
-
-
         # Mask
         if self.mask_name is None:
             # TODO: make a full mask
@@ -200,6 +228,27 @@ class PyZeta(object):
             self.mask = nib.load(self.mask_name)
 
 
+        # Reference set
+        if os.path.isfile(self.ref_set_name):
+            self.ref = nib.load(self.ref_set_name)
+        elif os.path.isdir(self.ref_set_name):
+            self.load_refs_from_dir()
+        else:
+            raise Exception('Cannot load reference data.')
+
+
+
+
+        # Data:
+        self.tgt_dat = self.tgt.get_fdata()
+        self.ref_dat = self.ref.get_fdata()
+
+        if self.mask is None:
+            self.gen_default_mask()
+
+        self.mask_dat = self.mask.get_fdata()
+
+        return
 
     ##############################################################
 
@@ -209,25 +258,25 @@ class PyZeta(object):
 
         print('Running')
 
-        self.tgt_dat = self.tgt.get_fdata()
-        self.ref_dat = self.ref.get_fdata()
-
-        if self.mask is None:
-            self.gen_default_mask()
-        else:
-            self.mask_dat = self.mask.get_fdata()
 
 
         self.check_input_data()
 
+
+
+
+        print('Done.')
+
+
+
+        return
 
     ##############################################################
 
 
     def gen_default_mask(self):
 
-        sz = self.tgt_dat.shape
-        self.mask = np.ones(sz, dtype=np.uint8)
+        self.mask = np.ones_like(self.tgt_dat, dtype=np.uint8, order='K')
         return
 
     ##############################################################
@@ -286,5 +335,6 @@ class PyZeta(object):
             print('Warning needed to set foreground mask voxels to zero.')
             print('Too close to volume edge.')
 
+        return
 
     ##############################################################
