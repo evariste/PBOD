@@ -6,7 +6,7 @@ import nibabel as nib
 
 ##############################################################
 
-def get_patch_offsets(patch_rad, sz_img, strides):
+def get_patch_offsets(patch_rad, sz_img, strides, data_item_size):
     """
         For given patch size, in an image array with the given size and
         strides, figure out the unraveled (flat index) offsets of each
@@ -23,9 +23,11 @@ def get_patch_offsets(patch_rad, sz_img, strides):
 
 
         :param patch_rad: Integer, patches are assumed to have odd
-                          diameter where diam = 2 * radius + 1.
+               diameter where diam = 2 * radius + 1.
         :param sz_img: Size of image array.
-        :param strides: Strides of data for image array.
+        :param strides: Strides in bytes of elements in the array.
+        :param data_item_size: The number of bytes for each element,
+               assumed to be uniform.
 
 
         :return: Flat index offsets of voxels in patch relative to
@@ -35,8 +37,13 @@ def get_patch_offsets(patch_rad, sz_img, strides):
     assert len(strides) in [3,4]
 
     s = np.asarray(strides)
-    f_order = np.all(s[:-1] < s[1:])
-    c_order = np.all(s[:-1] > s[1:])
+
+    assert np.all(s % data_item_size == 0)
+
+    idx_strides = s // data_item_size
+
+    f_order = np.all(idx_strides[:-1] < idx_strides[1:])
+    c_order = np.all(idx_strides[:-1] > idx_strides[1:])
 
     assert (f_order or c_order)
 
@@ -52,13 +59,13 @@ def get_patch_offsets(patch_rad, sz_img, strides):
         # first index changes fastest.
         ix = [x[::-1] for x in ix]
 
-    offset_i, offset_j, offset_k = strides[:3]
+    offset_i, offset_j, offset_k = idx_strides[:3]
 
     offset_t = 0
     t_dim = 1
 
     if len(strides) == 4:
-        offset_t = strides[-1]
+        offset_t = idx_strides[-1]
         assert len(sz_img) == 4
         t_dim = sz_img[-1]
 
@@ -75,6 +82,26 @@ def get_patch_offsets(patch_rad, sz_img, strides):
             n += 1
 
     return np.atleast_2d(offsets)
+
+##############################################################
+
+def get_data_order(strides, strict_check=True):
+
+    s = np.asarray(strides)
+    f_order = np.all(s[:-1] < s[1:])
+    c_order = np.all(s[:-1] > s[1:])
+
+    if strict_check:
+        assert (f_order or c_order)
+
+    if c_order:
+        order = 'C'
+    elif f_order:
+        order = 'F'
+    else:
+        order = 'unknown'
+
+    return order
 
 
 ##############################################################
@@ -108,6 +135,7 @@ class PyZeta(object):
         self.mask = None
         self.tgt = None
         self.ref = None
+        self.ref_order = 'F'
 
         self.tgt_dat = None
         self.ref_dat = None
@@ -151,6 +179,27 @@ class PyZeta(object):
 
         return
 
+
+    ##############################################################
+
+    def load_refs(self):
+
+        # Reference set
+        if os.path.isfile(self.ref_set_name):
+            self.load_refs_from_file()
+        elif os.path.isdir(self.ref_set_name):
+            self.load_refs_from_dir()
+        else:
+            raise Exception('Cannot load reference data.')
+
+    ##############################################################
+
+    def load_refs_from_file(self):
+
+        self.ref = nib.load(self.ref_set_name)
+
+        return
+
     ##############################################################
 
     def load_refs_from_dir(self):
@@ -183,19 +232,12 @@ class PyZeta(object):
 
         sz, strides, dt = sz[0], strides[0], dt[0]
 
-        s = np.asarray(strides)
-        f_order = np.all(s[:-1] < s[1:])
-        c_order = np.all(s[:-1] > s[1:])
-
-        assert (f_order or c_order)
-
-        order = 'C'
-        if f_order:
-            order = 'F'
 
         n_imgs = len(imgs_dat)
 
-        dat_all = np.zeros(sz+(n_imgs,), dtype=dt, order=order)
+        self.ref_order = get_data_order(strides)
+
+        dat_all = np.zeros(sz+(n_imgs,), dtype=dt, order=self.ref_order)
 
         for n in range(n_imgs):
             dat_all[...,n] = imgs_dat[n]
@@ -216,11 +258,14 @@ class PyZeta(object):
         if not (self.mask_name is None):
             assert os.path.isfile(self.mask_name)
 
-        # Target
+
+        # Reference set:
+        self.load_refs()
+
+        # Target:
         self.tgt = nib.load(self.target_name)
 
-
-        # Mask
+        # Mask:
         if self.mask_name is None:
             # TODO: make a full mask
             self.mask = None
@@ -228,25 +273,17 @@ class PyZeta(object):
             self.mask = nib.load(self.mask_name)
 
 
-        # Reference set
-        if os.path.isfile(self.ref_set_name):
-            self.ref = nib.load(self.ref_set_name)
-        elif os.path.isdir(self.ref_set_name):
-            self.load_refs_from_dir()
-        else:
-            raise Exception('Cannot load reference data.')
-
-
-
 
         # Data:
-        self.tgt_dat = self.tgt.get_fdata()
         self.ref_dat = self.ref.get_fdata()
+
+        self.tgt_dat = self.tgt.get_fdata()
 
         if self.mask is None:
             self.gen_default_mask()
 
         self.mask_dat = self.mask.get_fdata()
+
 
         return
 
