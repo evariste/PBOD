@@ -261,8 +261,44 @@ class PyZeta(object):
         self.tgt = nib.load(self.target_name)
 
 
-        self.tgt_dat = self.tgt.get_fdata()
+        self.tgt_dat = self.tgt.get_fdata() # type: np.ndarray
 
+
+        tgt_order = get_data_order(self.tgt_dat.strides)
+
+        if tgt_order == self.ref_order:
+            return
+
+        # Need to re-order data of target to match that of reference.
+
+        aff = self.tgt.get_affine()
+        dt = self.tgt_dat.dtype
+        sz = self.tgt_dat.shape
+        dim = len(sz)
+
+        assert dim in [3,4]
+
+
+        if not(dim == 3):
+            # TODO:
+            raise Exception('Only 3-D target images implemented. 4-D not yet done.')
+
+
+        tmp = np.zeros(sz, dtype=dt, order=self.ref_order)
+
+        rxs = [range(sz[k]) for k in range(dim)]
+        ix = list(product(*rxs))
+        for i, j, k in ix:
+            tmp[i,j,k] = self.tgt_dat[i,j,k]
+
+
+        nii = nib.Nifti1Image(tmp, aff, header=self.tgt.header)
+
+        del self.tgt_dat
+        del self.tgt
+
+        self.tgt = nii
+        self.tgt_dat = tmp
 
         return
 
