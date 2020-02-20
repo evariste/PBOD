@@ -198,6 +198,9 @@ class PyZeta(object):
 
         self.ref = nib.load(self.ref_set_name)
 
+        strides = self.ref.dataobj.__array_interface__['strides']
+        self.ref_order = get_data_order(strides)
+
         return
 
     ##############################################################
