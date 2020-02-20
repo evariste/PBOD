@@ -132,13 +132,12 @@ class PyZeta(object):
         self.report()
 
         # Stuff that will be set up later
-        self.mask = None
-        self.tgt = None
         self.ref = None
         self.ref_order = 'F'
-
-        self.tgt_dat = None
         self.ref_dat = None
+
+        self.tgt = None
+        self.tgt_dat = None
 
         return
 
@@ -307,19 +306,54 @@ class PyZeta(object):
     def load_mask(self):
 
         if self.mask_name is None:
-            # TODO: make a full mask
-            self.mask = None
+            # 'Full' mask with zeros at edges.
+            self.mask_dat = np.ones(self.tgt_dat, dtype=np.uint8, order=self.ref_order)
+
+            margin = self.patch_rad + self.nbhd_rad
+
+            ix = range(0, margin)
+            self.mask_dat[ix, :, :] = 0
+            self.mask_dat[:, ix, :] = 0
+            self.mask_dat[:, :, ix] = 0
+
+            ix = range(-margin, 0)
+            self.mask_dat[ix, :, :] = 0
+            self.mask_dat[:, ix, :] = 0
+            self.mask_dat[:, :, ix] = 0
+
         else:
-            self.mask = nib.load(self.mask_name)
+            nii_mask = nib.load(self.mask_name)
+            self.mask_dat = nii_mask.get_fdata()
 
 
+        mask_order = get_data_order(self.mask_dat.strides)
 
-        # Data:
+        if mask_order == self.ref_order:
+            return
 
-        if self.mask is None:
-            self.gen_default_mask()
 
-        self.mask_dat = self.mask.get_fdata()
+        # Need to re-order data of mask to match that of reference.
+
+        dt = np.uint8
+        sz = self.mask_dat.shape
+        dim = len(sz)
+
+        assert dim == 3
+
+
+        tmp = np.zeros(sz, dtype=dt, order=self.ref_order)
+
+        rxs = [range(sz[k]) for k in range(dim)]
+        ix = list(product(*rxs))
+        for i, j, k in ix:
+            if self.mask_dat[i,j,k] > 0:
+                tmp[i,j,k] = 1
+
+
+        del self.mask_dat
+
+        self.mask_dat = tmp
+
 
         return
 
@@ -368,13 +402,6 @@ class PyZeta(object):
 
         return
 
-    ##############################################################
-
-
-    def gen_default_mask(self):
-
-        self.mask = np.ones_like(self.tgt_dat, dtype=np.uint8, order='K')
-        return
 
     ##############################################################
 
