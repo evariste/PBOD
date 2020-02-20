@@ -192,14 +192,19 @@ class PyZeta(object):
         else:
             raise Exception('Cannot load reference data.')
 
+        self.ref_dat = self.ref.get_fdata()
+
+        return
+
     ##############################################################
 
     def load_refs_from_file(self):
 
         self.ref = nib.load(self.ref_set_name)
 
-        strides = self.ref.dataobj.__array_interface__['strides']
-        self.ref_order = get_data_order(strides)
+        self.ref_order = self.ref.dataobj.order
+
+        assert self.ref_order in ['F', 'C']
 
         return
 
@@ -251,6 +256,39 @@ class PyZeta(object):
 
     ##############################################################
 
+    def load_target(self):
+
+        self.tgt = nib.load(self.target_name)
+
+
+        self.tgt_dat = self.tgt.get_fdata()
+
+
+        return
+
+    ##############################################################
+
+    def load_mask(self):
+
+        if self.mask_name is None:
+            # TODO: make a full mask
+            self.mask = None
+        else:
+            self.mask = nib.load(self.mask_name)
+
+
+
+        # Data:
+
+        if self.mask is None:
+            self.gen_default_mask()
+
+        self.mask_dat = self.mask.get_fdata()
+
+        return
+
+    ##############################################################
+
     def initialise(self):
 
         print('Initialise')
@@ -262,30 +300,13 @@ class PyZeta(object):
             assert os.path.isfile(self.mask_name)
 
 
-        # Reference set:
+        # First load reference set.
         self.load_refs()
 
-        # Target:
-        self.tgt = nib.load(self.target_name)
+        self.load_target()
 
-        # Mask:
-        if self.mask_name is None:
-            # TODO: make a full mask
-            self.mask = None
-        else:
-            self.mask = nib.load(self.mask_name)
+        self.load_mask()
 
-
-
-        # Data:
-        self.ref_dat = self.ref.get_fdata()
-
-        self.tgt_dat = self.tgt.get_fdata()
-
-        if self.mask is None:
-            self.gen_default_mask()
-
-        self.mask_dat = self.mask.get_fdata()
 
 
         return
