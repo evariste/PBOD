@@ -399,13 +399,16 @@ class PyZeta(object):
         print('Running')
 
 
-        mask_flat = self.mask_dat.ravel(order='K')
+        mask_flat = self.mask_dat.ravel(order='A')
 
-        refs_flat = self.ref_dat.ravel(order='K')
+        refs_flat = self.ref_dat.ravel(order='A')
 
-        tgt_flat = self.tgt_dat.ravel(order='K')
+        tgt_flat = self.tgt_dat.ravel(order='A')
 
         tgt_inds = np.argwhere(mask_flat > 0).ravel()
+
+        out_dat = np.zeros_like(self.tgt_dat, order='A')
+        out_dat_flat = out_dat.ravel(order='A')
 
 
         # Offsets for the centres of reference patches in a neighbourhood,
@@ -441,15 +444,25 @@ class PyZeta(object):
 
         # Storage for contents of all ref patches:
         patch_dat_refs = np.zeros((n_nbhd, patch_vol), dtype=np.float)
-
         # Flat view of above.
         patch_dat_refs_ravel = patch_dat_refs.ravel(order='A')
+
+
+        # Patch data for the nearest k reference patches to the target.
+        patch_dat_refs_knn = np.zeros((self.k_zeta, patch_vol), dtype=np.float)
+        patch_dat_refs_knn_ravel = np.ravel(patch_dat_refs_knn, order='A')
+
+        # Indices in the upper half of a distance matrix (i.e. ignoring zeros in
+        # diagonal and lower half which is same as upper half for symmetric distances).
+        sz = (self.k_zeta, self.k_zeta)
+        knn_tri_upper_inds = [np.ravel_multi_index((i, j), sz) for i in range(self.k_zeta) for j in range(i + 1, self.k_zeta)]
+
 
 
         patch_dat_tgt = np.zeros((1, patch_vol), dtype=np.float)
 
         # Loop over positive mask voxels:
-        for tgt_ind in tgt_inds:
+        for n, tgt_ind in enumerate(tgt_inds):
 
             # Indices of centres of patches in neighbourhood.
             nbhd_inds = tgt_ind + nbhd_offsets
@@ -473,32 +486,31 @@ class PyZeta(object):
 
 
 
-            # Get squared Euclidean distances from patch_dat array.
-            # Size is 1+n_nbhd x 1+n_nbhd with the first row/column
-            # belonging to the target patch.
-            #Get euclidean from target to refs only
-            target2refDist = euclidean_distances(patch_dat_tgt, patch_dat_refs)
+            # Get squared Euclidean distances between target patch and all reference patches.
+
+            d_tgt2refs = euclidean_distances(patch_dat_tgt, patch_dat_refs).ravel()
+
+            # Get the k-nearest reference patches to the target patch.
+            ix = np.argpartition(d_tgt2refs, self.k_zeta)[:self.k_zeta]
+
+            d_tgt2refs = d_tgt2refs[ix]
 
 
-
-            # Combine above with Mahalanobis distance calculation.
-
-
+            # Distances within the knn ref patches.
+            d_refs2refs = euclidean_distances(patch_dat_refs[ix, :]).ravel()[knn_tri_upper_inds]
 
 
-
-
-
-
-
-
-
+            if n % 1000 == 0:
+                print(n//1000)
 
 
 
         print('Done.')
 
 
+        out_img = nib.Nifti1Image(out_dat, self.tgt.affine, self.tgt.header)
+
+        nib.save(out_img, self.output)
 
         return
 
