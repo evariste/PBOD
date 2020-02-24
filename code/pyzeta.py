@@ -3,6 +3,9 @@ from defaults import defaults
 from itertools import product
 import numpy as np
 import nibabel as nib
+from sklearn.metrics.pairwise import euclidean_distances
+
+
 
 ##############################################################
 
@@ -390,14 +393,17 @@ class PyZeta(object):
 
         self.initialise()
 
-        print('Running')
-
-
 
         self.check_input_data()
 
+        print('Running')
+
 
         mask_flat = self.mask_dat.ravel(order='K')
+
+        refs_flat = self.ref_dat.ravel(order='K')
+
+        tgt_flat = self.tgt_dat.ravel(order='K')
 
         tgt_inds = np.argwhere(mask_flat > 0).ravel()
 
@@ -433,16 +439,16 @@ class PyZeta(object):
         patch_inds_ravel = np.ravel(patch_inds, order='A')
 
 
-        # Storage for contents of all patches:
-        #   Target patch.
-        #   Reference patches in the neighbourhood.
-        patch_dat = np.zeros((1+n_nbhd, patch_vol), dtype=np.float)
+        # Storage for contents of all ref patches:
+        patch_dat_refs = np.zeros((n_nbhd, patch_vol), dtype=np.float)
 
         # Flat view of above.
-        patch_dat_ravel = patch_dat.ravel(order='A')
+        patch_dat_refs_ravel = patch_dat_refs.ravel(order='A')
 
 
+        patch_dat_tgt = np.zeros((1, patch_vol), dtype=np.float)
 
+        # Loop over positive mask voxels:
         for tgt_ind in tgt_inds:
 
             # Indices of centres of patches in neighbourhood.
@@ -451,22 +457,27 @@ class PyZeta(object):
             # Indices of all patch voxels in nbhd.
             patch_inds[:] = nbhd_inds + patch_offsets
 
+            # Pull patch data from reference array using raveled patch indices
+            # Place in the remaining rows of patch_dat
 
-            # What if there are too many patches in the neighbourhood?
-            # Randomly subsample them to get measures?
+            patch_dat_refs_ravel[:] = refs_flat[patch_inds_ravel]
 
 
             # pull patch data from target array.
             # Place it in the first row of patch_dat
             # Using the raveled version.
 
-            # Pull patch data from reference array using raveled patch indices
-            # Place in the remaining rows of patch_dat
+            patch_inds_tgt = tgt_ind + patch_offsets
+
+            patch_dat_tgt[:] = tgt_flat[patch_inds_tgt]
+
 
 
             # Get squared Euclidean distances from patch_dat array.
             # Size is 1+n_nbhd x 1+n_nbhd with the first row/column
             # belonging to the target patch.
+            #Get euclidean from target to refs only
+            target2refDist = euclidean_distances(patch_dat_tgt, patch_dat_refs)
 
 
 
