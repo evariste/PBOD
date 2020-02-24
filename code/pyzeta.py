@@ -199,7 +199,7 @@ class PyZeta(object):
 
     def load_refs_from_file(self):
 
-        self.ref = nib.load(self.ref_set_name)
+        self.ref = nib.load(self.ref_set_name, mmap=False)
 
         self.ref_order = self.ref.dataobj.order
 
@@ -249,6 +249,9 @@ class PyZeta(object):
         for n in range(n_imgs):
             dat_all[...,n] = imgs_dat[n]
 
+
+        del imgs_dat
+
         self.ref = nib.Nifti1Image(dat_all, np.eye(4))
 
         return
@@ -257,7 +260,7 @@ class PyZeta(object):
 
     def load_target(self):
 
-        self.tgt = nib.load(self.target_name)
+        self.tgt = nib.load(self.target_name, mmap=False)
 
 
         self.tgt_dat = self.tgt.get_fdata() # type: np.ndarray
@@ -322,7 +325,7 @@ class PyZeta(object):
             self.mask_dat[:, :, ix] = 0
 
         else:
-            nii_mask = nib.load(self.mask_name)
+            nii_mask = nib.load(self.mask_name, mmap=False)
             self.mask_dat = nii_mask.get_fdata()
 
 
@@ -392,6 +395,92 @@ class PyZeta(object):
 
 
         self.check_input_data()
+
+
+        mask_flat = self.mask_dat.ravel(order='K')
+
+        tgt_inds = np.argwhere(mask_flat > 0).ravel()
+
+
+        # Offsets for the centres of reference patches in a neighbourhood,
+        # relative to the central voxel of interest.
+        nbhd_offsets = get_patch_offsets(self.nbhd_rad,
+                                         self.ref_dat.shape,
+                                         self.ref_dat.strides,
+                                         self.ref_dat.itemsize)
+        # Make them a column vector.
+        nbhd_offsets = nbhd_offsets.T
+
+
+        # Offsets of patch voxels relative to central voxel.
+        patch_offsets = get_patch_offsets(self.patch_rad,
+                                          self.tgt_dat.shape,
+                                          self.tgt_dat.strides,
+                                          self.tgt_dat.itemsize)
+
+        # How big is the neighbourhood?
+        n_nbhd = nbhd_offsets.size
+        # Patch volume.
+        patch_vol = patch_offsets.size
+
+        # Prepare arrays for storing stuff inside the main loop. Try to
+        # avoid overhead of claiming memory within the loop.
+
+        # Indices of all patch voxels in the neigbourhood.
+        patch_inds = np.zeros((n_nbhd, patch_vol), dtype=np.int64)
+
+        # Flat view of above.
+        patch_inds_ravel = np.ravel(patch_inds, order='A')
+
+
+        # Storage for contents of all patches:
+        #   Target patch.
+        #   Reference patches in the neighbourhood.
+        patch_dat = np.zeros((1+n_nbhd, patch_vol), dtype=np.float)
+
+        # Flat view of above.
+        patch_dat_ravel = patch_dat.ravel(order='A')
+
+
+
+        for tgt_ind in tgt_inds:
+
+            # Indices of centres of patches in neighbourhood.
+            nbhd_inds = tgt_ind + nbhd_offsets
+
+            # Indices of all patch voxels in nbhd.
+            patch_inds[:] = nbhd_inds + patch_offsets
+
+
+            # What if there are too many patches in the neighbourhood?
+            # Randomly subsample them to get measures?
+
+
+            # pull patch data from target array.
+            # Place it in the first row of patch_dat
+            # Using the raveled version.
+
+            # Pull patch data from reference array using raveled patch indices
+            # Place in the remaining rows of patch_dat
+
+
+            # Get squared Euclidean distances from patch_dat array.
+            # Size is 1+n_nbhd x 1+n_nbhd with the first row/column
+            # belonging to the target patch.
+
+
+
+            # Combine above with Mahalanobis distance calculation.
+
+
+
+
+
+
+
+
+
+
 
 
 
