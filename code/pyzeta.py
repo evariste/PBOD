@@ -487,8 +487,8 @@ class PyZeta(object):
 
 
             # Get squared Euclidean distances between target patch and all reference patches.
-
             d_tgt2refs = euclidean_distances(patch_dat_tgt, patch_dat_refs).ravel()
+
 
             # Get the k-nearest reference patches to the target patch.
             ix = np.argpartition(d_tgt2refs, self.k_zeta)[:self.k_zeta]
@@ -499,6 +499,9 @@ class PyZeta(object):
             # Distances within the knn ref patches.
             d_refs2refs = euclidean_distances(patch_dat_refs[ix, :]).ravel()[knn_tri_upper_inds]
 
+
+
+            out_dat_flat[tgt_ind]=(np.mean(d_tgt2refs)-np.mean(d_refs2refs))/np.std(d_refs2refs)
 
             if n % 1000 == 0:
                 print(n//1000)
