@@ -109,7 +109,7 @@ def get_data_order(strides, strict_check=True):
 
 ##############################################################
 
-class PyZeta(object):
+class PBOutliers(object):
 
     def __init__(self, args):
 
@@ -501,7 +501,7 @@ class PyZeta(object):
 
 
 
-            out_dat_flat[tgt_ind]=(np.mean(d_tgt2refs)-np.mean(d_refs2refs))/np.std(d_refs2refs)
+            out_dat_flat[tgt_ind] = (np.mean(d_tgt2refs) - np.mean(d_refs2refs)) / np.std(d_refs2refs)
 
             if n % 1000 == 0:
                 print(n//1000)

@@ -1,6 +1,6 @@
 import numpy as np
 
-from pyzeta import get_patch_offsets
+from pb_outliers import get_patch_offsets
 
 print('===================================')
 print('3D')

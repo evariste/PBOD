@@ -2,7 +2,7 @@ import os
 import argparse
 
 from defaults import defaults
-from pyzeta import PyZeta
+from pb_outliers import PBOutliers
 
 
 ###########################################################################
@@ -60,9 +60,9 @@ def main():
 
     args = usage()
 
-    pyz = PyZeta(args)
+    pb_outliers = PBOutliers(args)
 
-    pyz.run()
+    pb_outliers.run()
 
     return 0
 
